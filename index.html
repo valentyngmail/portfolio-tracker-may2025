@@ -61,17 +61,29 @@
     }
 
     async function fetchPrices(tickers, rate) {
-      const url = `https://financialmodelingprep.com/api/v3/quote/${tickers.join(',')}?apikey=${fmpApiKey}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const prices = {};
-      data.forEach(item => {
-        const isUSD = item.currency === 'USD';
-        const eurPrice = isUSD ? item.price * rate : item.price;
-        prices[item.symbol] = eurPrice;
-      });
-      return prices;
+  const url = `https://financialmodelingprep.com/api/v3/quote/${tickers.join(',')}?apikey=${fmpApiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const prices = {};
+
+  data.forEach((item, index) => {
+    const isUSD = item.currency === 'USD';
+    const eurPrice = isUSD ? item.price * rate : item.price;
+    prices[item.symbol] = eurPrice;
+
+    // Log only for the first ticker
+    if (index === 0) {
+      console.log(`Ticker: ${item.symbol}`);
+      console.log(`Original Price: ${item.price}`);
+      console.log(`Currency: ${item.currency}`);
+      console.log(`Exchange Rate (USD → EUR): ${rate}`);
+      console.log(`Converted Price (EUR): ${eurPrice.toFixed(2)}`);
     }
+  });
+
+  return prices;
+}
+
 
     function updateTable(data, prices) {
       const tbody = document.querySelector('#portfolio-table tbody');
