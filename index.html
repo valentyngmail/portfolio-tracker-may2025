@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Sold Stocks Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    #pieChartContainer { width: 60%; margin: 40px auto; }
+  </style>
+</head>
+<body>
+  <h1>📈 My Sold Stocks Tracker</h1>
+
+  <input type="file" id="csvUpload" accept=".csv" />
+
+  <table id="portfolioTable">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Shares</th>
+        <th>Price (EUR)</th>
+        <th>Total Price (EUR)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="pieChartContainer">
+    <canvas id="pieChart"></canvas>
+  </div>
+
+  <h2>📊 2-Week Price Dynamics</h2>
+  <iframe src="stock-charts.html" width="100%" height="550" style="border:none;"></iframe>
+
+  <script>
+    document.getElementById('csvUpload').addEventListener('change', handleCSVUpload);
+
+    function parseEUFloat(value) {
+      return parseFloat(value.replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '')) || 0;
+    }
+
+    function handleCSVUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const lines = e.target.result.split('\n');
+        const headers = lines[0].split(',');
+        const tbody = document.querySelector('#portfolioTable tbody');
+        tbody.innerHTML = '';
+
+        const data = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const cells = lines[i].split(',');
+          if (cells.length < headers.length) continue;
+
+          const rowObj = {};
+          headers.forEach((header, idx) => {
+            rowObj[header.trim()] = cells[idx].trim();
+          });
+
+          const ticker = rowObj['Ticker'];
+          const shares = parseEUFloat(rowObj['Shares']);
+          const price = parseEUFloat(rowObj['Price (EUR)']);
+          const total = parseEUFloat(rowObj['Total Price (EUR)']);
+
+          data.push({ ticker, shares, price, total });
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${ticker}</td><td>${shares}</td><td>${price.toFixed(2)}</td><td>${total.toFixed(2)}</td>`;
+          tbody.appendChild(tr);
+        }
+
+        generatePieChart(data);
+      };
+
+      reader.readAsText(file);
+    }
+
+    function generatePieChart(data) {
+      const ctx = document.getElementById('pieChart').getContext('2d');
+      const labels = data.map(d => d.ticker);
+      const totals = data.map(d => d.total);
+
+      if (window.pieInstance) {
+        window.pieInstance.destroy();
+      }
+
+      window.pieInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: totals,
+            backgroundColor: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f']
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              position: 'right'
+            }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
