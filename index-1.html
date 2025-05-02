@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio - 1</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio - 1_1</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Table to display portfolio data -->
@@ -137,20 +137,15 @@
         }
         const currentPrice = stockData[row.Ticker] || 0; // Already in EUR
         const quantity = parseFloat(row.Quantity) || 0;
-        // Robust parsing for Total Price (EUR)
         let totalPriceRaw = row['Total Price (EUR)'].toString().trim();
-        let totalPrice = parseFloat(totalPriceRaw.replace(/[^0-9.,-]/g, '') // Remove non-numeric chars
-          .replace(/\.(?=\d{3})/g, '') // Remove thousand separator dots
-          .replace(',', '.')); // Replace comma with dot for decimal
+        let totalPrice = parseFloat(totalPriceRaw.replace(/[^0-9.,-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'));
         if (isNaN(totalPrice)) {
           console.warn(`Invalid Total Price (EUR) format for ${row.Ticker}: ${totalPriceRaw}`);
           totalPrice = 0;
         }
         const currentTotalValue = currentPrice * quantity;
-        const profitLoss = totalPrice - currentTotalValue; // Positive when current price is lower
-        totalProfitLoss += profitLoss; // Add to total
-
-        console.log(`Row ${row.Ticker}: Total Price=${totalPrice}, Current Total Value=${currentTotalValue}, Profit/Loss=${profitLoss}`);
+        const profitLoss = totalPrice - currentTotalValue;
+        totalProfitLoss += profitLoss;
 
         tbody.innerHTML += `
           <tr>
@@ -180,13 +175,15 @@
       const ctx = document.getElementById('portfolio-chart').getContext('2d');
       const datasets = portfolioData.map(row => ({
         label: row.Ticker,
-        data: [(stockData[row.Ticker] || 0) * (parseFloat(row.Quantity) || 0)], // Single data point per ticker
+        data: [(stockData[row.Ticker] || 0) * (parseFloat(row.Quantity) || 0)],
         borderColor: `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 1)`,
         backgroundColor: `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.2)`,
         fill: false,
         tension: 0.4
       }));
+
       if (chart) chart.destroy();
+
       chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -206,7 +203,6 @@
           }
         }
       });
-      console.log('Chart generated with datasets:', datasets);
     }
 
     // Initialize: Fetch exchange rate, then CSV and stock data
@@ -220,9 +216,7 @@
             showError('No data found in CSV. Check the Google Sheet URL.');
             return;
           }
-          console.log('Parsed CSV:', results.data);
           const tickers = getUniqueTickers(results.data);
-          console.log('Tickers:', tickers);
           if (tickers.length === 0) {
             showError('No valid tickers found in CSV.');
             return;
