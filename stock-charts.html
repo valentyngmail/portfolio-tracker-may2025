@@ -1,37 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2-Week Price Dynamics</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 1rem; }
-    canvas { max-width: 100%; height: 500px; }
-  </style>
 </head>
-<body>
-  <h2>📉 2-Week Price Dynamics</h2>
-  <canvas id="lineChart"></canvas>
+<body class="bg-white text-dark p-4">
+  <h2>📊 2-Week Price Dynamics (in EUR)</h2>
+  <canvas id="lineChart" height="100"></canvas>
 
   <script>
-    const tickers = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'META', 'NFLX'];
+    const tickers = ['AAPL', 'GOOGL', 'META', 'TSLA', 'NFLX'];
     const fmpApiKey = 'U3IvlUHsgfPqwclA11fnwhCzptP9FtfE';
 
     async function getUsdToEurRate() {
-      const cached = localStorage.getItem('eur-rate');
-      const expiry = localStorage.getItem('eur-rate-expiry');
+      const cached = localStorage.getItem('eur-usd-chart-rate');
+      const expiry = parseInt(localStorage.getItem('eur-usd-chart-expiry'), 10);
       const now = Date.now();
-      if (cached && expiry && now < Number(expiry)) return Number(cached);
+      if (cached && expiry && now < expiry) return parseFloat(cached);
 
       try {
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=EUR');
         const data = await res.json();
-        const rate = data.rates.EUR;
-        localStorage.setItem('eur-rate', rate);
-        localStorage.setItem('eur-rate-expiry', now + 86400000);
+        const rate = data?.rates?.EUR || 0;
+        if (rate > 0) {
+          localStorage.setItem('eur-usd-chart-rate', rate);
+          localStorage.setItem('eur-usd-chart-expiry', now + 86400000);
+        }
         return rate;
-      } catch (e) {
-        console.error('Failed to fetch EUR rate');
+      } catch {
         return 0;
       }
     }
@@ -39,42 +37,43 @@
     async function fetchHistoricalPrices(ticker) {
       const res = await fetch(`https://financialmodelingprep.com/api/v3/historical-price-full/${ticker}?timeseries=14&apikey=${fmpApiKey}`);
       const data = await res.json();
-      return data.historical.reverse(); // oldest to newest
+      return data?.historical?.map(item => ({ date: item.date, close: item.close })) || [];
     }
 
     async function drawChart() {
-      const ctx = document.getElementById('lineChart').getContext('2d');
       const rate = await getUsdToEurRate();
+      const datasets = [];
+      let labels = [];
 
-      const datasets = await Promise.all(tickers.map(async ticker => {
+      for (const ticker of tickers) {
         const history = await fetchHistoricalPrices(ticker);
-        return {
+        if (!history.length) continue;
+
+        const eurPrices = history.map(p => (p.close * rate).toFixed(2));
+        if (labels.length === 0) {
+          labels = history.map(p => p.date).reverse();
+        }
+
+        datasets.push({
           label: ticker,
-          data: history.map(day => (day.currency === 'USD' ? day.close * rate : day.close)),
+          data: eurPrices.reverse(),
           borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
-          tension: 0.3,
-          fill: false
-        };
-      }));
+          fill: false,
+          tension: 0.3
+        });
+      }
 
-      const labels = (await fetchHistoricalPrices(tickers[0])).map(d => d.date);
-
+      const ctx = document.getElementById('lineChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
         data: { labels, datasets },
         options: {
           responsive: true,
-          interaction: { mode: 'index', intersect: false },
-          stacked: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Stock Prices in EUR (Last 2 Weeks)'
-            }
-          },
+          plugins: { legend: { position: 'bottom' } },
           scales: {
             y: {
-              title: { display: true, text: 'Price (EUR)' }
+              title: { display: true, text: 'Price in EUR' },
+              beginAtZero: false
             },
             x: {
               title: { display: true, text: 'Date' }
