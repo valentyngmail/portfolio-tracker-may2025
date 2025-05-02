@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Sold Stocks Tracker - r1</h1>
+    <h1 class="mb-4">📈 My Sold Stocks Tracker - n1</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Portfolio Table -->
@@ -47,7 +47,7 @@
     let chart;
 
     function parseNumber(val) {
-      return parseFloat(val?.toString().replace(/[^.\d-]/g, '').replace(',', '.')) || 0;
+      return parseFloat(val?.toString().replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
     }
 
     async function getEurRate() {
@@ -66,8 +66,9 @@
       const data = await res.json();
       const prices = {};
       data.forEach(item => {
-        const conversion = item.currency === 'USD' ? rate : 1;
-        prices[item.symbol] = item.price * conversion;
+        const isUSD = item.currency === 'USD';
+        const eurPrice = isUSD ? item.price * rate : item.price;
+        prices[item.symbol] = eurPrice;
       });
       return prices;
     }
@@ -91,7 +92,7 @@
           <tr>
             <td>${ticker}</td>
             <td>${quantity.toFixed(2)}</td>
-            <td>${buyPrice.toFixed(2)} €</td>
+            <td>${row['Price (EUR)']}</td>
             <td>${row.Date || ''}</td>
             <td>${totalBuy.toFixed(2)} €</td>
             <td>${currentPrice.toFixed(2)} €</td>
