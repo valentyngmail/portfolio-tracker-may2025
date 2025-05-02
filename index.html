@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Stock Portfolio</title>
+  <title>My Sold Stocks Tracker</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio</h1>
+    <h1 class="mb-4">📈 My Sold Stocks Tracker 1</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Portfolio Table -->
@@ -29,20 +29,22 @@
       <tbody></tbody>
     </table>
 
+    <!-- Embedded chart page -->
+    <iframe src="stock-charts.html" width="100%" height="500" style="border: none;"></iframe>
+
     <!-- Pie Chart -->
     <div class="card my-4">
       <div class="card-body">
         <canvas id="portfolio-chart"></canvas>
       </div>
     </div>
-
-    <!-- Embedded chart page -->
-    <iframe src="stock-charts.html" width="100%" height="500" style="border: none;"></iframe>
   </div>
 
   <script>
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv';
     const fmpApiKey = 'U3IvlUHsgfPqwclA11fnwhCzptP9FtfE';
+    const currencyCacheKey = 'eur-usd-rate';
+    const currencyCacheExpiryKey = 'eur-usd-rate-expiry';
     let chart;
 
     function showError(message) {
@@ -66,14 +68,37 @@
       return [...new Set(data.map(row => row.Ticker?.trim()).filter(Boolean))];
     }
 
+    async function getUsdToEurRate() {
+      const cachedRate = localStorage.getItem(currencyCacheKey);
+      const expiry = parseInt(localStorage.getItem(currencyCacheExpiryKey), 10);
+      const now = Date.now();
+      if (cachedRate && expiry && now < expiry) {
+        return parseFloat(cachedRate);
+      }
+
+      try {
+        const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=EUR`);
+        const data = await res.json();
+        const rate = data?.rates?.EUR || 0.93;
+        localStorage.setItem(currencyCacheKey, rate);
+        localStorage.setItem(currencyCacheExpiryKey, now + 86400000); // cache for 1 day
+        return rate;
+      } catch (err) {
+        console.error('Failed to fetch currency rate, using fallback.');
+        return 0.93;
+      }
+    }
+
     async function fetchPricesFromFMP(tickers) {
       const results = {};
       try {
+        const rate = await getUsdToEurRate();
         const url = `https://financialmodelingprep.com/api/v3/quote/${tickers.join(',')}?apikey=${fmpApiKey}`;
         const response = await fetch(url);
         const data = await response.json();
         data.forEach(stock => {
-          results[stock.symbol] = stock.price;
+          const conversionRate = stock.currency === 'USD' ? rate : 1;
+          results[stock.symbol] = stock.price * conversionRate;
         });
       } catch (error) {
         console.error('Error fetching FMP prices:', error);
@@ -94,7 +119,7 @@
         const totalPrice = parseNumber(row['Total Price (EUR)']);
         const currentPrice = stockPrices[ticker] || 0;
         const currentTotalValue = quantity * currentPrice;
-        const profitLoss = currentTotalValue - totalPrice;
+        const profitLoss = totalPrice - currentTotalValue;
         totalProfitLoss += profitLoss;
 
         tbody.innerHTML += `
