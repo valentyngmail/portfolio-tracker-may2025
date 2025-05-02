@@ -9,7 +9,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Sold Stocks Tracker</h1>
+    <h1 class="mb-4">📈 My Sold Stocks Tracker 2</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Portfolio Table -->
@@ -64,15 +64,6 @@
       ) || 0;
     }
 
-    function formatCurrency(value) {
-      return value.toLocaleString('en-GB', {
-        style: 'currency',
-        currency: 'EUR',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
-    }
-
     function getUniqueTickers(data) {
       return [...new Set(data.map(row => row.Ticker?.trim()).filter(Boolean))];
     }
@@ -88,13 +79,15 @@
       try {
         const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=EUR`);
         const data = await res.json();
-        const rate = data?.rates?.EUR || 0.93;
-        localStorage.setItem(currencyCacheKey, rate);
-        localStorage.setItem(currencyCacheExpiryKey, now + 86400000); // cache for 1 day
+        const rate = data?.rates?.EUR || 0;
+        if (rate > 0) {
+          localStorage.setItem(currencyCacheKey, rate);
+          localStorage.setItem(currencyCacheExpiryKey, now + 86400000); // cache for 1 day
+        }
         return rate;
       } catch (err) {
         console.error('Failed to fetch currency rate, using fallback.');
-        return 0.93;
+        return 0;
       }
     }
 
@@ -106,7 +99,7 @@
         const response = await fetch(url);
         const data = await response.json();
         data.forEach(stock => {
-          const conversionRate = stock.currency === 'USD' ? rate : 1;
+          const conversionRate = stock.currency === 'USD' ? rate : stock.currency === 'EUR' ? 1 : 0;
           results[stock.symbol] = stock.price * conversionRate;
         });
       } catch (error) {
@@ -135,12 +128,12 @@
           <tr>
             <td>${ticker}</td>
             <td>${quantity.toFixed(2)}</td>
-            <td>${formatCurrency(buyPrice)}</td>
+            <td>${buyPrice.toFixed(2)} €</td>
             <td>${row.Date || 'N/A'}</td>
-            <td>${formatCurrency(totalPrice)}</td>
-            <td>${formatCurrency(currentPrice)}</td>
-            <td>${formatCurrency(currentTotalValue)}</td>
-            <td class="${profitLoss >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(profitLoss)}</td>
+            <td>${totalPrice.toFixed(2)} €</td>
+            <td>${currentPrice.toFixed(2)} €</td>
+            <td>${currentTotalValue.toFixed(2)} €</td>
+            <td class="${profitLoss >= 0 ? 'text-success' : 'text-danger'}">${profitLoss.toFixed(2)} €</td>
           </tr>
         `;
       });
@@ -148,7 +141,7 @@
       tbody.innerHTML += `
         <tr class="fw-bold">
           <td colspan="7">Total</td>
-          <td class="${totalProfitLoss >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(totalProfitLoss)}</td>
+          <td class="${totalProfitLoss >= 0 ? 'text-success' : 'text-danger'}">${totalProfitLoss.toFixed(2)} €</td>
         </tr>
       `;
     }
