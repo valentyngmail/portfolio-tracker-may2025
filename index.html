@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio 01</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio 02</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Table to display portfolio data -->
@@ -44,7 +44,7 @@
     const yahooApiKey = '97171e98camsh5eb470dfc81357dp1da351jsnd8907bf4c7b4';
     const yahooApiHost = 'yh-finance.p.rapidapi.com';
     let chart;
-    let usdToEurRate = 1; // Default to 1 if exchange rate fetch fails
+    let usdToEurRate = 0; // Default to 0 if exchange rate fetch fails
 
     // Show error message on page
     function showError(message) {
@@ -71,11 +71,11 @@
           console.log(`USD to EUR exchange rate: ${usdToEurRate}`);
         } else {
           console.warn('No exchange rate data:', data);
-          showError('Failed to fetch USD to EUR exchange rate. Using default rate of 1.');
+          showError('Failed to fetch USD to EUR exchange rate. Prices will show as 0 €.');
         }
       } catch (error) {
         console.error('Exchange rate error:', error);
-        showError('Failed to fetch USD to EUR exchange rate. Using default rate of 1.');
+        showError('Failed to fetch USD to EUR exchange rate. Prices will show as 0 €.');
       }
     }
 
@@ -128,6 +128,8 @@
     function updatePortfolioWithPrices(stockData, portfolioData) {
       const tbody = document.querySelector('#portfolio-table tbody');
       tbody.innerHTML = '';
+      let totalProfitLoss = 0; // Track sum of Profit/Loss (EUR)
+
       portfolioData.forEach(row => {
         if (!row.Ticker || !row.Quantity || !row['Price (EUR)'] || !row['Total Price (EUR)']) {
           console.warn(`Invalid row data:`, row);
@@ -137,9 +139,8 @@
         const quantity = parseFloat(row.Quantity) || 0;
         // Robust parsing for Total Price (EUR)
         let totalPriceRaw = row['Total Price (EUR)'].toString().trim();
-        let totalPrice = parseFloat(totalPriceRaw.replace(/[^0-9.,-]/g, '')
-  // Remove non-numeric chars (e.g., €, EUR, spaces)
-          .replace(/\.(?=\d{3})/g, '') // Remove thousand separator dots (e.g., 1.234,56)
+        let totalPrice = parseFloat(totalPriceRaw.replace(/[^0-9.,-]/g, '') // Remove non-numeric chars
+          .replace(/\.(?=\d{3})/g, '') // Remove thousand separator dots
           .replace(',', '.')); // Replace comma with dot for decimal
         if (isNaN(totalPrice)) {
           console.warn(`Invalid Total Price (EUR) format for ${row.Ticker}: ${totalPriceRaw}`);
@@ -147,6 +148,9 @@
         }
         const currentTotalValue = currentPrice * quantity;
         const profitLoss = totalPrice - currentTotalValue; // Positive when current price is lower
+        totalProfitLoss += profitLoss; // Add to total
+
+        console.log(`Row ${row.Ticker}: Total Price=${totalPrice}, Current Total Value=${currentTotalValue}, Profit/Loss=${profitLoss}`);
 
         tbody.innerHTML += `
           <tr>
@@ -161,6 +165,14 @@
           </tr>
         `;
       });
+
+      // Add total row for Profit/Loss (EUR)
+      tbody.innerHTML += `
+        <tr class="fw-bold">
+          <td colspan="7">Total</td>
+          <td class="${totalProfitLoss >= 0 ? 'text-success' : 'text-danger'}">${totalProfitLoss.toFixed(2)} €</td>
+        </tr>
+      `;
     }
 
     // Generate line chart
@@ -194,6 +206,7 @@
           }
         }
       });
+      console.log('Chart generated with datasets:', datasets);
     }
 
     // Initialize: Fetch exchange rate, then CSV and stock data
