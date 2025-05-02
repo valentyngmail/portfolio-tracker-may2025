@@ -86,7 +86,9 @@
       chart: null,
       usdToEurRate: 0,
       apiCallCount: 0,
-      isLoading: true
+      isLoading: true,
+      Chart: null,
+      ChartAnnotation: null
     };
 
     // DOM Elements
@@ -402,7 +404,7 @@
         }
 
         // Create new chart
-        state.chart = new Chart(elements.chartCanvas, {
+        state.chart = new state.Chart(elements.chartCanvas, {
           type: 'line',
           data: {
             labels: dates,
@@ -473,11 +475,18 @@
           helpers.loadScript('https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js')
         ]);
 
-        // Register Chart.js plugins
-        if (typeof Chart !== 'undefined' && typeof ChartAnnotation !== 'undefined') {
-          Chart.register(ChartAnnotation);
+        // Store Chart.js references in state
+        if (typeof Chart !== 'undefined') {
+          state.Chart = Chart;
         } else {
-          throw new Error('Failed to load Chart.js or its plugins');
+          throw new Error('Failed to load Chart.js');
+        }
+
+        if (typeof ChartAnnotation !== 'undefined') {
+          state.ChartAnnotation = ChartAnnotation;
+          state.Chart.register(state.ChartAnnotation);
+        } else {
+          console.warn('Chart annotation plugin not loaded - annotations will be disabled');
         }
 
         helpers.showLoading('Fetching exchange rates...');
