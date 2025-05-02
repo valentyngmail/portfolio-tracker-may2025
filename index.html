@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio 5</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio 6</h1>
 
     <!-- Section 1: Chart -->
     <div class="mb-4">
@@ -71,7 +71,8 @@
         // Debugging: Check if row data is correct
         console.log(row);
 
-        if (row.Ticker && row.Quantity && row["Price (EUR)"] && row.Date) {
+        // Check if the necessary data exists
+        if (row.Ticker && row.Quantity && row["Price (EUR)"] && row.Date && row["Total Price (EUR)"]) {
           // Convert Date (DD.MM.YYYY) to JavaScript Date
           const dateParts = row.Date.split('.');
           const dateObj = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
@@ -80,23 +81,26 @@
           const priceStr = row["Price (EUR)"].replace(' €', '').replace(',', '.');
           const price = parseFloat(priceStr);
           
+          // Convert Total Price (EUR) from "380,05 €" to numeric value
+          const totalPriceStr = row["Total Price (EUR)"].replace(' €', '').replace(',', '.');
+          const totalPrice = parseFloat(totalPriceStr);
+          
           const quantity = parseFloat(row.Quantity);
           
           // Ensure price and quantity are valid numbers
-          if (isNaN(price) || isNaN(quantity)) {
+          if (isNaN(price) || isNaN(quantity) || isNaN(totalPrice)) {
             console.error("Invalid data in row:", row);
             return; // Skip invalid row
           }
 
-          const totalPrice = (quantity * price).toFixed(2); // Calculate total price
-
+          // Add row to table
           table.innerHTML += `
             <tr>
               <td>${row.Ticker}</td>
               <td>${row.Quantity}</td>
-              <td>${price}</td>
+              <td>${price.toFixed(2)}</td>
               <td>${dateObj.toLocaleDateString()}</td>
-              <td>${totalPrice}</td>
+              <td>${totalPrice.toFixed(2)}</td>
             </tr>
           `;
         } else {
