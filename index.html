@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Portfolio Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/tabletop@1.5.4/tabletop.min.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h1>📈 My Stock Portfolio</h1>
+  <table id="portfolio-table">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Quantity</th>
+        <th>Price (EUR)</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const publicSpreadsheetURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pubhtml';
+
+    function showInfo(data) {
+      const table = document.querySelector("#portfolio-table tbody");
+      table.innerHTML = "";
+      data.forEach(row => {
+        table.innerHTML += `
+          <tr>
+            <td>${row.Ticker}</td>
+            <td>${row.Quantity}</td>
+            <td>${row["Price (EUR)"]}</td>
+            <td>${row.Date}</td>
+          </tr>
+        `;
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      Tabletop.init({
+        key: publicSpreadsheetURL,
+        callback: showInfo,
+        simpleSheet: true
+      });
+    });
+  </script>
+</body>
+</html>
