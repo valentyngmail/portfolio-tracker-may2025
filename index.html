@@ -70,18 +70,30 @@
     }
 
     async function getUsdToEurRate() {
-      // Temporarily disable caching
+      const cachedRate = localStorage.getItem(currencyCacheKey);
+      const expiry = parseInt(localStorage.getItem(currencyCacheExpiryKey), 10);
       const now = Date.now();
-      localStorage.setItem(currencyCacheExpiryKey, 0); // Set cache expiry to 0 to always fetch the rate
+      
+      // Temporarily disable caching
+      if (cachedRate && expiry && now < expiry) {
+        return parseFloat(cachedRate);
+      }
 
       try {
         const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=EUR`);
         const data = await res.json();
         const rate = data?.rates?.EUR || 0;
-        return rate;
+        
+        if (rate > 0) {
+          localStorage.setItem(currencyCacheKey, rate);
+          localStorage.setItem(currencyCacheExpiryKey, now + 86400000); // cache for 1 day
+        }
+        
+        // If the rate fetch fails, fallback to the approximate 0.93 rate
+        return rate > 0 ? rate : 0.93; 
       } catch (err) {
         console.error('Failed to fetch currency rate, using fallback.');
-        return 0;
+        return 0.93; // Default to 0.93 if the API fails
       }
     }
 
