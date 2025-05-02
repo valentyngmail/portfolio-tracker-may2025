@@ -2,81 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>2-Week Price Dynamics</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <title>2-Week Stock Price Dynamics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-white text-dark p-4">
-  <h2>📊 2-Week Price Dynamics (in EUR)</h2>
-  <canvas id="lineChart" height="100"></canvas>
+<body>
+  <h2 style="text-align:center;">2-Week Price Dynamics (in EUR)</h2>
+  <canvas id="lineChart" width="800" height="400"></canvas>
 
   <script>
-    const tickers = ['AAPL', 'GOOGL', 'META', 'TSLA', 'NFLX'];
+    const tickers = ['AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA']; // Customize this if needed
     const fmpApiKey = 'U3IvlUHsgfPqwclA11fnwhCzptP9FtfE';
 
+    const currencyCacheKey = 'eur-usd-rate';
+    const currencyCacheExpiryKey = 'eur-usd-rate-expiry';
+
     async function getUsdToEurRate() {
-      const cached = localStorage.getItem('eur-usd-chart-rate');
-      const expiry = parseInt(localStorage.getItem('eur-usd-chart-expiry'), 10);
+      const cachedRate = localStorage.getItem(currencyCacheKey);
+      const expiry = parseInt(localStorage.getItem(currencyCacheExpiryKey), 10);
       const now = Date.now();
-      if (cached && expiry && now < expiry) return parseFloat(cached);
+
+      if (cachedRate && expiry && now < expiry) {
+        return parseFloat(cachedRate);
+      }
 
       try {
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=EUR');
         const data = await res.json();
         const rate = data?.rates?.EUR || 0;
         if (rate > 0) {
-          localStorage.setItem('eur-usd-chart-rate', rate);
-          localStorage.setItem('eur-usd-chart-expiry', now + 86400000);
+          localStorage.setItem(currencyCacheKey, rate);
+          localStorage.setItem(currencyCacheExpiryKey, now + 86400000); // 1 day
         }
         return rate;
-      } catch {
+      } catch (e) {
+        console.error('Failed to fetch exchange rate:', e);
         return 0;
       }
     }
 
-    async function fetchHistoricalPrices(ticker) {
-      const res = await fetch(`https://financialmodelingprep.com/api/v3/historical-price-full/${ticker}?timeseries=14&apikey=${fmpApiKey}`);
-      const data = await res.json();
-      return data?.historical?.map(item => ({ date: item.date, close: item.close })) || [];
+    async function fetchHistoricalPrices(ticker, rate) {
+      try {
+        const res = await fetch(`https://financialmodelingprep.com/api/v3/historical-price-full/${ticker}?serietype=line&timeseries=14&apikey=${fmpApiKey}`);
+        const data = await res.json();
+        return data.historical.map(item => ({
+          date: item.date,
+          price: item.close * rate
+        })).reverse(); // to ensure chronological order
+      } catch (e) {
+        console.error(`Error fetching prices for ${ticker}`, e);
+        return [];
+      }
     }
 
     async function drawChart() {
       const rate = await getUsdToEurRate();
+      if (rate === 0) {
+        alert("Unable to get EUR conversion rate.");
+        return;
+      }
+
       const datasets = [];
       let labels = [];
 
       for (const ticker of tickers) {
-        const history = await fetchHistoricalPrices(ticker);
-        if (!history.length) continue;
-
-        const eurPrices = history.map(p => (p.close * rate).toFixed(2));
-        if (labels.length === 0) {
-          labels = history.map(p => p.date).reverse();
+        const history = await fetchHistoricalPrices(ticker, rate);
+        if (!labels.length && history.length) {
+          labels = history.map(p => p.date);
         }
-
         datasets.push({
           label: ticker,
-          data: eurPrices.reverse(),
+          data: history.map(p => p.price),
           borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
           fill: false,
-          tension: 0.3
+          tension: 0.1
         });
       }
 
-      const ctx = document.getElementById('lineChart').getContext('2d');
-      new Chart(ctx, {
+      new Chart(document.getElementById('lineChart').getContext('2d'), {
         type: 'line',
-        data: { labels, datasets },
+        data: {
+          labels,
+          datasets
+        },
         options: {
           responsive: true,
-          plugins: { legend: { position: 'bottom' } },
+          plugins: {
+            legend: { position: 'top' },
+            title: {
+              display: true,
+              text: 'Price in EUR (last 2 weeks)'
+            }
+          },
           scales: {
             y: {
-              title: { display: true, text: 'Price in EUR' },
-              beginAtZero: false
-            },
-            x: {
-              title: { display: true, text: 'Date' }
+              title: {
+                display: true,
+                text: 'Price (EUR)'
+              }
             }
           }
         }
