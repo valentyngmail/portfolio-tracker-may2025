@@ -9,14 +9,35 @@
 <body class="bg-light text-dark p-4">
   <div class="container">
     <h1 class="mb-4">📈 My Stock Portfolio</h1>
-    <!-- Table or other sections you want to show -->
+
+    <!-- Chart Section -->
+    <div id="portfolio-chart" style="width: 100%; height: 400px;"></div>
+
+    <hr>
+
+    <!-- Table Section -->
+    <h2>Stock Portfolio Details</h2>
+    <table class="table table-bordered table-striped" id="portfolio-table">
+      <thead class="table-dark">
+        <tr>
+          <th>Ticker</th>
+          <th>Quantity</th>
+          <th>Price (EUR)</th>
+          <th>Date</th>
+          <th>Total Price (EUR)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Populated by JavaScript -->
+      </tbody>
+    </table>
   </div>
 
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <script>
-    // Test the Google Sheet CSV loading with a unique variable name
+    // Test the Google Sheet CSV loading
     const testCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv';
 
     Papa.parse(testCsvUrl, {
@@ -24,9 +45,60 @@
       header: true,
       complete: function(results) {
         console.log("Parsed data:", results.data);
-        document.body.innerHTML += `<pre>${JSON.stringify(results.data, null, 2)}</pre>`;
+        showPortfolio(results.data);  // Show the table
+        plotPortfolioChart(results.data);  // Plot the chart
       }
     });
+
+    // Function to display portfolio data in table
+    function showPortfolio(data) {
+      const table = document.querySelector("#portfolio-table tbody");
+      table.innerHTML = "";
+      data.forEach(row => {
+        table.innerHTML += `
+          <tr>
+            <td>${row.Ticker}</td>
+            <td>${row.Quantity}</td>
+            <td>${row["Price (EUR)"]}</td>
+            <td>${row.Date || ''}</td>
+            <td>${(row.Quantity * row["Price (EUR)"]).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+    }
+
+    // Function to plot portfolio value chart
+    function plotPortfolioChart(data) {
+      const dates = [];
+      const totalValues = [];
+
+      // Collect data for chart
+      data.forEach(row => {
+        if (row.Date && row["Price (EUR)"] && row.Quantity) {
+          dates.push(row.Date);
+          totalValues.push(row.Quantity * row["Price (EUR)"]);
+        }
+      });
+
+      const chartData = {
+        labels: dates,
+        datasets: [{
+          label: 'Portfolio Value (EUR)',
+          data: totalValues,
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          fill: true
+        }]
+      };
+
+      const ctx = document.getElementById('portfolio-chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: chartData
+      });
+    }
   </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>
