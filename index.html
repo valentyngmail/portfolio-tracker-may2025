@@ -3,15 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Stock Tracker</title>
+  <title>📈 My Sold Stocks Tracker</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1>📊 My Sold Stocks Tracker - </h1>
-    <canvas id="portfolio-chart" class="my-4"></canvas>
+    <h1 class="mb-4">📈 My Sold Stocks Tracker</h1>
+    <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
+
+    <!-- Portfolio Table -->
+    <table class="table table-bordered table-striped table-hover" id="portfolio-table">
+      <thead class="table-dark">
+        <tr>
+          <th>Ticker</th>
+          <th>Quantity</th>
+          <th>Price (EUR)</th>
+          <th>Date</th>
+          <th>Total Price (EUR)</th>
+          <th>Current Price (EUR)</th>
+          <th>Current Total Value (EUR)</th>
+          <th>Profit/Loss (EUR)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Pie Chart -->
+    <div class="card my-4">
+      <div class="card-body">
+        <canvas id="portfolio-chart"></canvas>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -20,16 +44,16 @@
     let chart;
 
     function parseNumber(val) {
-      return parseFloat(val.replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
+      return parseFloat(val?.toString().replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
     }
 
     async function getEurRate() {
       try {
         const res = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=EUR');
         const data = await res.json();
-        return data?.rates?.EUR || 0.93; // fallback if API fails
+        return data?.rates?.EUR || 0.93;
       } catch {
-        return 0.93; // fallback on error
+        return 0.93;
       }
     }
 
@@ -39,29 +63,60 @@
       const data = await res.json();
       const prices = {};
       data.forEach(item => {
-        prices[item.symbol] = item.price * (item.currency === 'USD' ? rate : 1);
+        const conversion = item.currency === 'USD' ? rate : 1;
+        prices[item.symbol] = item.price * conversion;
       });
       return prices;
     }
 
-    async function init() {
-      const res = await fetch(csvUrl);
-      const text = await res.text();
-      const { data } = Papa.parse(text, { header: true });
+    function updateTable(data, prices) {
+      const tbody = document.querySelector('#portfolio-table tbody');
+      tbody.innerHTML = '';
+      let totalProfit = 0;
 
-      const tickers = [...new Set(data.map(row => row.Ticker).filter(Boolean))];
-      const eurRate = await getEurRate();
-      const prices = await fetchPrices(tickers, eurRate);
+      data.forEach(row => {
+        const ticker = row.Ticker;
+        const quantity = parseNumber(row.Quantity);
+        const buyPrice = parseNumber(row['Price (EUR)']);
+        const totalBuy = parseNumber(row['Total Price (EUR)']);
+        const currentPrice = prices[ticker] || 0;
+        const currentTotal = currentPrice * quantity;
+        const diff = currentTotal - totalBuy;
+        totalProfit += diff;
 
+        tbody.innerHTML += `
+          <tr>
+            <td>${ticker}</td>
+            <td>${quantity.toFixed(2)}</td>
+            <td>${buyPrice.toFixed(2)} €</td>
+            <td>${row.Date || ''}</td>
+            <td>${totalBuy.toFixed(2)} €</td>
+            <td>${currentPrice.toFixed(2)} €</td>
+            <td>${currentTotal.toFixed(2)} €</td>
+            <td class="${diff >= 0 ? 'text-success' : 'text-danger'}">${diff.toFixed(2)} €</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML += `
+        <tr class="fw-bold">
+          <td colspan="7">Total</td>
+          <td class="${totalProfit >= 0 ? 'text-success' : 'text-danger'}">${totalProfit.toFixed(2)} €</td>
+        </tr>
+      `;
+    }
+
+    function renderPieChart(data, prices) {
+      const ctx = document.getElementById('portfolio-chart').getContext('2d');
       const labels = [];
       const values = [];
       const colors = [];
 
       data.forEach(row => {
         const ticker = row.Ticker;
-        const quantity = parseNumber(row.Quantity || "0");
-        const price = prices[ticker] || 0;
-        const value = quantity * price;
+        const quantity = parseNumber(row.Quantity);
+        const currentPrice = prices[ticker] || 0;
+        const value = quantity * currentPrice;
         if (value > 0) {
           labels.push(ticker);
           values.push(value);
@@ -69,7 +124,6 @@
         }
       });
 
-      const ctx = document.getElementById('portfolio-chart').getContext('2d');
       if (chart) chart.destroy();
       chart = new Chart(ctx, {
         type: 'pie',
@@ -77,13 +131,23 @@
           labels: labels,
           datasets: [{
             data: values,
-            backgroundColor: colors,
+            backgroundColor: colors
           }]
         },
-        options: {
-          responsive: true
-        }
+        options: { responsive: true }
       });
+    }
+
+    async function init() {
+      const res = await fetch(csvUrl);
+      const text = await res.text();
+      const parsed = Papa.parse(text, { header: true });
+      const data = parsed.data.filter(row => row.Ticker);
+      const tickers = [...new Set(data.map(r => r.Ticker))];
+      const eurRate = await getEurRate();
+      const prices = await fetchPrices(tickers, eurRate);
+      updateTable(data, prices);
+      renderPieChart(data, prices);
     }
 
     document.addEventListener('DOMContentLoaded', init);
