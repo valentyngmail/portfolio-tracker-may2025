@@ -42,21 +42,23 @@
     });
 
     function showPortfolio(data) {
-      const table = document.querySelector("#portfolio-table tbody");
-      table.innerHTML = "";
-      data.forEach(row => {
-        if (row.Ticker && row.Quantity && row.Price) {
-          table.innerHTML += `
-            <tr>
-              <td>${row.Ticker}</td>
-              <td>${row.Quantity}</td>
-              <td>${row.Price}</td>
-              <td>${row.Date || ''}</td>
-            </tr>
-          `;
-        }
-      });
+  const table = document.querySelector("#portfolio-table tbody");
+  table.innerHTML = "";
+  data.forEach(row => {
+    // You can skip this "if" condition if you want to show all rows
+    if (row.Ticker && row.Quantity && row["Price (EUR)"]) {
+      table.innerHTML += `
+        <tr>
+          <td>${row.Ticker}</td>
+          <td>${row.Quantity}</td>
+          <td>${row["Price (EUR)"]}</td>
+          <td>${row.Date || ''}</td>
+          <td>${row["Total Price (EUR)"] || ''}</td>
+        </tr>
+      `;
     }
+  });
+}
   </script>
 </body>
 </html>
