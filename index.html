@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Sold Stocks Tracker - n1</h1>
+    <h1 class="mb-4">📈 My Sold Stocks Tracker - n2</h1>
     <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
 
     <!-- Portfolio Table -->
@@ -61,14 +61,12 @@
     }
 
     async function fetchPrices(tickers, rate) {
-  const url = `https://financialmodelingprep.com/api/v3/quote/${tickers.join(',')}?apikey=${fmpApiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  const prices = {};
-
-  data.forEach((item, index) => {
-    const isUSD = item.currency === 'USD';
-    const eurPrice = isUSD ? item.price * rate : item.price;
+    const url = `https://financialmodelingprep.com/api/v3/quote/${tickers.join(',')}?apikey=${fmpApiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const prices = {};
+    data.forEach(item => {
+    const eurPrice = item.price * rate; // Always convert from USD
     prices[item.symbol] = eurPrice;
 
     // Log only for the first ticker
@@ -79,11 +77,10 @@
       console.log(`Exchange Rate (USD → EUR): ${rate}`);
       console.log(`Converted Price (EUR): ${eurPrice.toFixed(2)}`);
     }
-  });
-
-  return prices;
-}
-
+    
+    });
+    return prices;
+    }
 
     function updateTable(data, prices) {
       const tbody = document.querySelector('#portfolio-table tbody');
