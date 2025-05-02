@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Stock Portfolio</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    @media (max-width: 768px) {
+      #portfolio-table {
+        font-size: 0.8rem;
+      }
+      #portfolio-table th, #portfolio-table td {
+        padding: 0.3rem;
+      }
+    }
+    .table-responsive {
+      overflow-x: auto;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(0,0,0,.1);
+      border-radius: 50%;
+      border-top-color: #0d6efd;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-light text-dark p-3 p-md-4">
+  <div class="container">
+    <h1 class="mb-4">📈 My Stock Portfolio</h1>
+    
+    <div id="status-message" class="alert alert-info" role="alert">
+      <span class="loading-spinner"></span> Loading data...
+    </div>
+    
+    <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
+
+    <!-- Table to display portfolio data -->
+    <div class="table-responsive mb-4">
+      <table class="table table-bordered table-striped table-hover" id="portfolio-table">
+        <thead class="table-dark">
+          <tr>
+            <th>Ticker</th>
+            <th>Quantity</th>
+            <th>Price (EUR)</th>
+            <th>Date</th>
+            <th>Total Price (EUR)</th>
+            <th>Current Price (EUR)</th>
+            <th>Current Total Value (EUR)</th>
+            <th>Profit/Loss (EUR)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Chart to show stock prices -->
+    <div class="card mb-4">
+      <div class="card-header bg-dark text-white">
+        Portfolio Performance (Last 14 Days)
+      </div>
+      <div class="card-body">
+        <canvas id="portfolio-chart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const config = {
+      csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv',
+      alphaVantageKey: 'R8WOU4IBIHN1AIUV',
+      cacheDuration: 3600000, // 1 hour cache
+      apiDelay: 13000, // 13 seconds between API calls
+      maxApiCalls: 5 // Alpha Vantage free tier limit
+    };
+
+    // State
+    let state = {
+      chart: null,
+      usdToEurRate: 0,
+      apiCallCount: 0,
+      isLoading: true
+    };
+
+    // DOM Elements
+    const elements = {
+      statusMessage: document.getElementById('status-message'),
+      errorMessage: document.getElementById('error-message'),
+      portfolioTable: document.getElementById('portfolio-table'),
+      chartCanvas: document.getElementById('portfolio-chart')
+    };
+
+    // Helper Functions
+    const helpers = {
+      showLoading: (message) => {
+        elements.statusMessage.classList.remove('d-none', 'alert-danger', 'alert-success');
+        elements.statusMessage.classList.add('alert-info');
+        elements.statusMessage.innerHTML = `<span class="loading-spinner"></span> ${message}`;
+        state.isLoading = true;
+      },
+      
+      showSuccess: (message) => {
+        elements.statusMessage.classList.remove('d-none', 'alert-danger', 'alert-info');
+        elements.statusMessage.classList.add('alert-success');
+        elements.statusMessage.innerHTML = `✓ ${message}`;
+        state.isLoading = false;
+        setTimeout(() => elements.statusMessage.classList.add('d-none'), 3000);
+      },
+      
+      showError: (message) => {
+        elements.errorMessage.classList.remove('d-none');
+        elements.errorMessage.textContent = message;
+        elements.statusMessage.classList.remove('d-none', 'alert-info', 'alert-success');
+        elements.statusMessage.classList.add('alert-danger');
+        elements.statusMessage.innerHTML = `⚠ ${message}`;
+        state.isLoading = false;
+      },
+      
+      loadScript: (src) => {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+          document.head.appendChild(script);
+        });
+      },
+      
+      parseNumber: (str) => {
+        if (!str) return 0;
+        const num = parseFloat(str.toString().replace(/[^0-9.-]/g, ''));
+        return isNaN(num) ? 0 : num;
+      },
+      
+      formatCurrency: (value) => {
+        return value.toFixed(2) + ' €';
+      },
+      
+      getUniqueTickers: (data) => {
+        const tickers = data
+          .filter(row => row.Ticker && typeof row.Ticker === 'string' && row.Ticker.trim())
+          .map(row => row.Ticker.trim().toUpperCase());
+        return [...new Set(tickers)];
+      },
+      
+      validateRow: (row) => {
+        if (!row.Ticker || typeof row.Ticker !== 'string' || !row.Ticker.trim()) {
+          return false;
+        }
+        return true;
+      }
+    };
+
+    // Data Functions
+    const dataService = {
+      fetchExchangeRate: async () => {
+        try {
+          const response = await fetch(
+            `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=EUR&apikey=${config.alphaVantageKey}`
+          );
+          const data = await response.json();
+          
+          if (data["Realtime Currency Exchange Rate"] && data["Realtime Currency Exchange Rate"]["5. Exchange Rate"]) {
+            state.usdToEurRate = helpers.parseNumber(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"]);
+            console.log(`USD to EUR exchange rate: ${state.usdToEurRate}`);
+          } else {
+            state.usdToEurRate = 0;
+            helpers.showError('Failed to fetch current USD to EUR exchange rate. Prices will show as 0 €.');
+          }
+        } catch (error) {
+          state.usdToEurRate = 0;
+          console.error('Exchange rate error:', error);
+          helpers.showError('Failed to fetch USD to EUR exchange rate. Prices will show as 0 €.');
+        }
+      },
+      
+      getCachedData: (ticker) => {
+        const cached = localStorage.getItem(`stock_${ticker}`);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < config.cacheDuration) return data;
+        }
+        return null;
+      },
+      
+      setCachedData: (ticker, data) => {
+        localStorage.setItem(`stock_${ticker}`, JSON.stringify({ data, timestamp: Date.now() }));
+      },
+      
+      fetchStockData: async (tickers, portfolioData) => {
+        const stockData = { current: {}, historical: {} };
+        
+        for (const [index, ticker] of tickers.entries()) {
+          if (state.apiCallCount >= config.maxApiCalls) {
+            console.log('Reached API limit, waiting 1 minute...');
+            helpers.showLoading('Waiting for API rate limit (1 minute)...');
+            await new Promise(resolve => setTimeout(resolve, 60000));
+            state.apiCallCount = 0;
+          }
+          
+          try {
+            // Current price
+            const avQuoteResponse = await fetch(
+              `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.alphaVantageKey}`
+            );
+            const avQuoteData = await avQuoteResponse.json();
+            
+            if (avQuoteData["Global Quote"] && avQuoteData["Global Quote"]["05. price"]) {
+              stockData.current[ticker] = helpers.parseNumber(avQuoteData["Global Quote"]["05. price"]) * state.usdToEurRate;
+              console.log(`Fetched current ${ticker}: ${stockData.current[ticker]} EUR`);
+            } else {
+              stockData.current[ticker] = 0;
+              console.warn(`No current price data for ${ticker}`);
+            }
+            
+            // Historical prices
+            let historical = dataService.getCachedData(ticker);
+            if (!historical) {
+              const avHistoricalResponse = await fetch(
+                `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${config.alphaVantageKey}`
+              );
+              historical = (await avHistoricalResponse.json())["Time Series (Daily)"];
+              if (historical) {
+                dataService.setCachedData(ticker, historical);
+                console.log(`Fetched historical ${ticker}`);
+              }
+            } else {
+              console.log(`Used cached historical ${ticker}`);
+            }
+            
+            if (historical) stockData.historical[ticker] = historical;
+            
+            state.apiCallCount++;
+            
+            // Add delay between calls, except for the last one
+            if (index < tickers.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, config.apiDelay));
+            }
+          } catch (error) {
+            console.error(`Alpha Vantage error for ${ticker}:`, error);
+            stockData.current[ticker] = 0;
+          }
+        }
+        
+        if (Object.keys(stockData.current).length === 0) {
+          helpers.showError('No stock data retrieved. Check CSV or API settings.');
+        } else {
+          portfolioView.updatePortfolioWithPrices(stockData.current, portfolioData);
+          portfolioView.generateChart(stockData.historical, portfolioData);
+          helpers.showSuccess('Portfolio data loaded successfully');
+        }
+      }
+    };
+
+    // View Functions
+    const portfolioView = {
+      updatePortfolioWithPrices: (currentPrices, portfolioData) => {
+        const tbody = elements.portfolioTable.querySelector('tbody');
+        let rows = '';
+        let totalProfitLoss = 0;
+        let totalInvestment = 0;
+        let totalCurrentValue = 0;
+
+        portfolioData.filter(helpers.validateRow).forEach(row => {
+          const ticker = row.Ticker.trim().toUpperCase();
+          const currentPrice = currentPrices[ticker] || 0;
+          const quantity = helpers.parseNumber(row.Quantity);
+          const purchasePrice = helpers.parseNumber(row['Price (EUR)']);
+          const totalPrice = helpers.parseNumber(row['Total Price (EUR)']);
+          const currentTotalValue = currentPrice * quantity;
+          const profitLoss = currentTotalValue - totalPrice;
+          
+          totalProfitLoss += profitLoss;
+          totalInvestment += totalPrice;
+          totalCurrentValue += currentTotalValue;
+
+          rows += `
+            <tr>
+              <td>${ticker}</td>
+              <td>${quantity.toFixed(2)}</td>
+              <td>${helpers.formatCurrency(purchasePrice)}</td>
+              <td>${row.Date || 'N/A'}</td>
+              <td>${helpers.formatCurrency(totalPrice)}</td>
+              <td>${helpers.formatCurrency(currentPrice)}</td>
+              <td>${helpers.formatCurrency(currentTotalValue)}</td>
+              <td class="${profitLoss >= 0 ? 'text-success' : 'text-danger'}">
+                ${helpers.formatCurrency(profitLoss)}
+              </td>
+            </tr>
+          `;
+        });
+
+        // Add summary row
+        rows += `
+          <tr class="fw-bold">
+            <td colspan="4">Total</td>
+            <td>${helpers.formatCurrency(totalInvestment)}</td>
+            <td></td>
+            <td>${helpers.formatCurrency(totalCurrentValue)}</td>
+            <td class="${totalProfitLoss >= 0 ? 'text-success' : 'text-danger'}">
+              ${helpers.formatCurrency(totalProfitLoss)}
+            </td>
+          </tr>
+        `;
+        
+        tbody.innerHTML = rows;
+      },
+      
+      generateChart: (historicalData, portfolioData) => {
+        if (Object.keys(historicalData).length === 0) {
+          helpers.showError('No historical data available for chart.');
+          return;
+        }
+
+        const today = new Date();
+        const dates = [];
+        for (let i = 13; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          dates.push(date.toISOString().split('T')[0]);
+        }
+
+        // Prepare datasets
+        const datasets = [];
+        const annotations = {};
+        
+        // Add individual stock datasets
+        portfolioData.filter(helpers.validateRow).forEach(row => {
+          const ticker = row.Ticker.trim().toUpperCase();
+          if (!historicalData[ticker]) {
+            console.warn(`No historical data for ${ticker}`);
+            return;
+          }
+          
+          const prices = dates.map(date => {
+            const data = historicalData[ticker][date];
+            return data ? helpers.parseNumber(data["4. close"]) * state.usdToEurRate : null;
+          });
+          
+          const color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+          datasets.push({
+            label: ticker,
+            data: prices,
+            borderColor: color,
+            backgroundColor: color.replace(')', ', 0.2)'),
+            borderWidth: 2,
+            tension: 0.2,
+            pointRadius: 3
+          });
+
+          // Annotate purchase date if available
+          if (row.Date && row.Date.match(/^\d{4}-\d{2}-\d{2}$/) && dates.includes(row.Date)) {
+            annotations[`${ticker}-date`] = {
+              type: 'line',
+              xMin: row.Date,
+              xMax: row.Date,
+              borderColor: color,
+              borderWidth: 2,
+              label: {
+                content: `Bought ${ticker}`,
+                display: true,
+                position: 'top'
+              }
+            };
+          }
+        });
+
+        // Add portfolio dataset
+        const portfolioValues = dates.map(date => {
+          let total = 0;
+          portfolioData.filter(helpers.validateRow).forEach(row => {
+            const ticker = row.Ticker.trim().toUpperCase();
+            if (historicalData[ticker] && historicalData[ticker][date]) {
+              total += helpers.parseNumber(historicalData[ticker][date]["4. close"]) * 
+                       state.usdToEurRate * 
+                       helpers.parseNumber(row.Quantity);
+            }
+          });
+          return total || null;
+        });
+        
+        datasets.push({
+          label: 'Total Portfolio',
+          data: portfolioValues,
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2
+        });
+
+        // Destroy previous chart if exists
+        if (state.chart) {
+          state.chart.destroy();
+        }
+
+        // Create new chart
+        state.chart = new Chart(elements.chartCanvas, {
+          type: 'line',
+          data: {
+            labels: dates,
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              annotation: {
+                annotations: annotations
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: (context) => {
+                    let label = context.dataset.label || '';
+                    if (label) {
+                      label += ': ';
+                    }
+                    if (context.parsed.y !== null) {
+                      label += helpers.formatCurrency(context.parsed.y);
+                    }
+                    return label;
+                  }
+                }
+              },
+              legend: {
+                position: 'top',
+                labels: {
+                  boxWidth: 12
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: 'Date'
+                }
+              },
+              y: {
+                beginAtZero: false,
+                title: {
+                  display: true,
+                  text: 'Value (EUR)'
+                },
+                ticks: {
+                  callback: (value) => helpers.formatCurrency(value)
+                }
+              }
+            }
+          }
+        });
+      }
+    };
+
+    // Main Initialization
+    async function init() {
+      try {
+        helpers.showLoading('Loading required libraries...');
+        
+        // Load dependencies
+        await Promise.all([
+          helpers.loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'),
+          helpers.loadScript('https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js'),
+          helpers.loadScript('https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js')
+        ]);
+
+        // Register Chart.js plugins
+        if (typeof Chart !== 'undefined' && typeof ChartAnnotation !== 'undefined') {
+          Chart.register(ChartAnnotation);
+        } else {
+          throw new Error('Failed to load Chart.js or its plugins');
+        }
+
+        helpers.showLoading('Fetching exchange rates...');
+        await dataService.fetchExchangeRate();
+
+        helpers.showLoading('Loading portfolio data...');
+        
+        // Parse CSV data
+        Papa.parse(config.csvUrl, {
+          download: true,
+          header: true,
+          complete: (results) => {
+            if (!results.data || results.data.length === 0) {
+              helpers.showError('No data found in CSV. Check the Google Sheet URL.');
+              return;
+            }
+            
+            console.log('Parsed CSV:', results.data);
+            const validData = results.data.filter(helpers.validateRow);
+            
+            if (validData.length === 0) {
+              helpers.showError('No valid tickers found in CSV data.');
+              return;
+            }
+            
+            const tickers = helpers.getUniqueTickers(validData);
+            console.log('Tickers to fetch:', tickers);
+            
+            helpers.showLoading('Fetching stock data...');
+            dataService.fetchStockData(tickers, validData);
+          },
+          error: (error) => {
+            console.error('CSV Error:', error.message);
+            helpers.showError(`Failed to load CSV data: ${error.message}`);
+          }
+        });
+      } catch (error) {
+        console.error('Initialization error:', error);
+        helpers.showError(`Failed to initialize application: ${error.message}`);
+      }
+    }
+
+    // Start the application
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
