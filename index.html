@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio 2</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio 3</h1>
 
     <!-- Section 1: Chart -->
     <div class="mb-4">
@@ -69,19 +69,31 @@
 
       data.forEach(row => {
         // Debugging: Check if row data is correct
-        console.log(row);  
+        console.log(row);
 
         if (row.Ticker && row.Quantity && row["Price (EUR)"] && row.Date) {
-          const totalPrice = (parseFloat(row.Quantity) * parseFloat(row["Price (EUR)"])).toFixed(2);
+          // Convert Date (DD.MM.YYYY) to JavaScript Date
+          const dateParts = row.Date.split('.');
+          const dateObj = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+
+          // Convert Price (EUR) from "380,05 €" to numeric value
+          const priceStr = row["Price (EUR)"].replace(' €', '').replace(',', '.');
+          const price = parseFloat(priceStr);
+          
+          const quantity = parseFloat(row.Quantity);
+          const totalPrice = (quantity * price).toFixed(2); // Calculate total price
+
           table.innerHTML += `
             <tr>
               <td>${row.Ticker}</td>
               <td>${row.Quantity}</td>
-              <td>${row["Price (EUR)"]}</td>
-              <td>${row.Date || ''}</td>
+              <td>${price}</td>
+              <td>${dateObj.toLocaleDateString()}</td>
               <td>${totalPrice}</td>
             </tr>
           `;
+        } else {
+          console.error("Missing data in row:", row);
         }
       });
     }
@@ -90,9 +102,13 @@
     function showPortfolioChart(data) {
       console.log("Generating chart with data...", data);  // Debugging chart data
 
-      const labels = data.map(row => row.Date);
+      const labels = data.map(row => {
+        const dateParts = row.Date.split('.');
+        return `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;  // Convert to YYYY-MM-DD format
+      });
+      
       const totalPrices = data.map(row => {
-        const price = parseFloat(row["Price (EUR)"]);
+        const price = parseFloat(row["Price (EUR)"].replace(' €', '').replace(',', '.'));
         const quantity = parseFloat(row.Quantity);
         return !isNaN(price) && !isNaN(quantity) ? price * quantity : 0; // Ensure valid data
       });
