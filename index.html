@@ -11,7 +11,9 @@
     <h1 class="mb-4">📈 My Stock Portfolio</h1>
 
     <!-- Chart Section -->
-    <div id="portfolio-chart" style="width: 100%; height: 400px;"></div>
+    <div id="portfolio-chart" style="width: 100%; height: 400px;">
+      <canvas id="chartCanvas"></canvas>
+    </div>
 
     <hr>
 
@@ -36,11 +38,15 @@
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <script>
-    // Test the Google Sheet CSV loading
-    const testCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv';
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    Papa.parse(testCsvUrl, {
+  <script>
+    // Replace this with your Google Sheet CSV URL
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv';
+
+    // Fetch and parse CSV data
+    Papa.parse(csvUrl, {
       download: true,
       header: true,
       complete: function(results) {
@@ -54,16 +60,20 @@
     function showPortfolio(data) {
       const table = document.querySelector("#portfolio-table tbody");
       table.innerHTML = "";
+
       data.forEach(row => {
-        table.innerHTML += `
-          <tr>
-            <td>${row.Ticker}</td>
-            <td>${row.Quantity}</td>
-            <td>${row["Price (EUR)"]}</td>
-            <td>${row.Date || ''}</td>
-            <td>${(row.Quantity * row["Price (EUR)"]).toFixed(2)}</td>
-          </tr>
-        `;
+        if (row.Ticker && row.Quantity && row["Price (EUR)"]) {
+          const totalPrice = (parseFloat(row.Quantity) * parseFloat(row["Price (EUR)"])).toFixed(2);
+          table.innerHTML += `
+            <tr>
+              <td>${row.Ticker}</td>
+              <td>${row.Quantity}</td>
+              <td>${row["Price (EUR)"]}</td>
+              <td>${row.Date || ''}</td>
+              <td>${totalPrice}</td>
+            </tr>
+          `;
+        }
       });
     }
 
@@ -75,8 +85,9 @@
       // Collect data for chart
       data.forEach(row => {
         if (row.Date && row["Price (EUR)"] && row.Quantity) {
+          const totalValue = (parseFloat(row.Quantity) * parseFloat(row["Price (EUR)"])).toFixed(2);
           dates.push(row.Date);
-          totalValues.push(row.Quantity * row["Price (EUR)"]);
+          totalValues.push(totalValue);
         }
       });
 
@@ -91,14 +102,25 @@
         }]
       };
 
-      const ctx = document.getElementById('portfolio-chart').getContext('2d');
+      const ctx = document.getElementById('chartCanvas').getContext('2d');
       new Chart(ctx, {
         type: 'line',
-        data: chartData
+        data: chartData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              type: 'category',
+              labels: dates
+            },
+            y: {
+              beginAtZero: false
+            }
+          }
+        }
       });
     }
   </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>
