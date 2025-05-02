@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio 3</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio 5</h1>
 
     <!-- Section 1: Chart -->
     <div class="mb-4">
@@ -81,6 +81,13 @@
           const price = parseFloat(priceStr);
           
           const quantity = parseFloat(row.Quantity);
+          
+          // Ensure price and quantity are valid numbers
+          if (isNaN(price) || isNaN(quantity)) {
+            console.error("Invalid data in row:", row);
+            return; // Skip invalid row
+          }
+
           const totalPrice = (quantity * price).toFixed(2); // Calculate total price
 
           table.innerHTML += `
