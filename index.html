@@ -10,7 +10,7 @@
 </head>
 <body class="bg-light text-dark p-4">
   <div class="container">
-    <h1 class="mb-4">📈 My Stock Portfolio 1</h1>
+    <h1 class="mb-4">📈 My Stock Portfolio 2</h1>
 
     <!-- Section 1: Chart -->
     <div class="mb-4">
@@ -42,14 +42,16 @@
     // Replace with your published Google Sheet CSV URL
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-YRIK8OyKyVRKfhn8PyK28VR2bnbaEP2PSyl-IpmffzNZo94BlQTO6qgmr2CAYV_H0Evj0t9otKdU/pub?output=csv';
 
+    // Parse CSV from Google Sheets
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       complete: function(results) {
-        console.log("Parsed data:", results.data);
+        console.log("Parsed data:", results.data);  // Debugging data
+
         if (results.data && results.data.length > 0) {
-          showPortfolio(results.data);
-          showPortfolioChart(results.data);
+          showPortfolio(results.data);  // Populate Table
+          showPortfolioChart(results.data);  // Populate Chart
         } else {
           console.log("No data found in the spreadsheet.");
         }
@@ -61,11 +63,15 @@
 
     // Show portfolio data in the table
     function showPortfolio(data) {
+      console.log("Populating table with data...", data);  // Debugging table data
       const table = document.querySelector("#portfolio-table tbody");
-      table.innerHTML = "";
+      table.innerHTML = ""; // Clear any previous data
+
       data.forEach(row => {
+        // Debugging: Check if row data is correct
+        console.log(row);  
+
         if (row.Ticker && row.Quantity && row["Price (EUR)"] && row.Date) {
-          // Ensure we have valid data to display
           const totalPrice = (parseFloat(row.Quantity) * parseFloat(row["Price (EUR)"])).toFixed(2);
           table.innerHTML += `
             <tr>
@@ -82,13 +88,17 @@
 
     // Show the chart with individual stock performance
     function showPortfolioChart(data) {
-      // Prepare labels and datasets for chart
+      console.log("Generating chart with data...", data);  // Debugging chart data
+
       const labels = data.map(row => row.Date);
       const totalPrices = data.map(row => {
         const price = parseFloat(row["Price (EUR)"]);
         const quantity = parseFloat(row.Quantity);
         return !isNaN(price) && !isNaN(quantity) ? price * quantity : 0; // Ensure valid data
       });
+
+      console.log("Chart labels:", labels);
+      console.log("Chart total prices:", totalPrices);
 
       // Only display chart if there's data
       if (labels.length > 0 && totalPrices.length > 0) {
