@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stock Price Trends</title>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #ccc;
+      font-family: sans-serif;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .loading {
+      font-family: sans-serif;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Stock Price Changes Over Time</h2>
+  <div class="loading">Loading historical data...</div>
+  <table id="stock-table">
+    <thead>
+      <tr id="table-header">
+        <th>Ticker</th>
+        <th>Quantity</th>
+        <th>Price Per Share (EUR)</th>
+        <th>Date of Sale</th>
+        <th>Total Price (EUR)</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td>MSFT</td><td>15</td><td>380.05</td><td>02.05.2025</td><td>5700.75</td></tr>
+      <tr><td>META</td><td>6</td><td>511.80</td><td>02.05.2025</td><td>3070.80</td></tr>
+      <tr><td>GOOGL</td><td>20</td><td>143.42</td><td>02.05.2025</td><td>2868.40</td></tr>
+      <tr><td>NFLX</td><td>2</td><td>1003.20</td><td>02.05.2025</td><td>2006.40</td></tr>
+      <tr><td>TSLA</td><td>10</td><td>248.25</td><td>02.05.2025</td><td>2482.50</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    const apiKey = 'U3IvlUHsgfPqwclA11fnwhCzptP9FtfE';
+    const tickers = ['MSFT', 'META', 'GOOGL', 'NFLX', 'TSLA'];
+    const table = document.getElementById('stock-table');
+    const headerRow = document.getElementById('table-header');
+    const bodyRows = document.getElementById('table-body').rows;
+    const loadingMsg = document.querySelector('.loading');
+
+    async function fetchDailyPrices() {
+      const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${tickers.join(',')}?apikey=${apiKey}`;
+      const res = await fetch(url);
+      return res.json();
+    }
+
+    async function fetchIntraday2h(ticker) {
+      const url = `https://financialmodelingprep.com/api/v3/historical-chart/2hour/${ticker}?apikey=${apiKey}`;
+      const res = await fetch(url);
+      return res.json();
+    }
+
+    function formatDateLabel(dateStr) {
+      const d = new Date(dateStr);
+      return d.toISOString().split('T')[0];
+    }
+
+    function formatDateTimeLabel(dateStr) {
+      const d = new Date(dateStr);
+      return d.toISOString().replace('T', ' ').slice(0, 16);
+    }
+
+    async function loadData() {
+      try {
+        const [dailyData] = await Promise.all([fetchDailyPrices()]);
+        const timeCols = new Set();
+        const dailyMap = {};
+
+        // Process daily prices for 4 previous days
+        for (const stock of dailyData.historicalStockList || []) {
+          const symbol = stock.symbol;
+          dailyMap[symbol] = {};
+          let count = 0;
+
+          for (const h of stock.historical) {
+            const label = formatDateLabel(h.date);
+            dailyMap[symbol][label] = h.close;
+            timeCols.add(label);
+            if (++count >= 4) break;
+          }
+        }
+
+        // Fetch intraday for each ticker (parallel)
+        const intradayData = await Promise.all(tickers.map(t => fetchIntraday2h(t)));
+        const intradayMap = {};
+        const intradayLabels = new Set();
+
+        for (let i = 0; i < tickers.length; i++) {
+          const symbol = tickers[i];
+          const data = intradayData[i];
+          intradayMap[symbol] = {};
+          let latestDate = data.length ? data[0].date.split(' ')[0] : null;
+
+          for (const d of data) {
+            if (d.date.startsWith(latestDate)) {
+              const dt = formatDateTimeLabel(d.date);
+              intradayMap[symbol][dt] = d.close;
+              intradayLabels.add(dt);
+            }
+          }
+        }
+
+        // Build headers
+        const sortedDaily = [...timeCols].sort((a, b) => new Date(b) - new Date(a));
+        const sortedIntraday = [...intradayLabels].sort((a, b) => new Date(a) - new Date(b));
+
+        for (const label of sortedDaily) {
+          const th = document.createElement('th');
+          th.textContent = label;
+          headerRow.appendChild(th);
+        }
+        for (const dt of sortedIntraday) {
+          const th = document.createElement('th');
+          th.textContent = dt;
+          headerRow.appendChild(th);
+        }
+
+        // Fill rows
+        for (let i = 0; i < bodyRows.length; i++) {
+          const row = bodyRows[i];
+          const symbol = row.cells[0].textContent;
+
+          // Daily cells
+          for (const label of sortedDaily) {
+            const td = document.createElement('td');
+            const val = dailyMap[symbol]?.[label];
+            td.textContent = val ? val.toFixed(2) : '-';
+            row.appendChild(td);
+          }
+
+          // Intraday cells
+          for (const dt of sortedIntraday) {
+            const td = document.createElement('td');
+            const val = intradayMap[symbol]?.[dt];
+            td.textContent = val ? val.toFixed(2) : '-';
+            row.appendChild(td);
+          }
+        }
+
+        loadingMsg.style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        loadingMsg.textContent = 'Failed to load data.';
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
