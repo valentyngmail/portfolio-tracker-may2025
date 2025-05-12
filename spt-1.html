@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Stock Price Trends 1</title>
+  <title>Stock Price Trends</title>
   <style>
     table {
       width: 100%;
@@ -51,7 +51,8 @@
     </tbody>
     <tfoot>
       <tr id="summary-row">
-        <td colspan="5">Total per Date/Time</td>
+        <td colspan="4">Totals</td>
+        <td id="summary-total-price">-</td>
       </tr>
     </tfoot>
   </table>
@@ -62,12 +63,13 @@
     const headerRow = document.getElementById('table-header');
     const bodyRows = document.getElementById('table-body').rows;
     const summaryRow = document.getElementById('summary-row');
+    const summaryTotalPriceCell = document.getElementById('summary-total-price');
     const loadingMsg = document.querySelector('.loading');
 
     async function fetchExchangeRate() {
       const res = await fetch(`https://financialmodelingprep.com/api/v3/fx/EURUSD?apikey=${apiKey}`);
       const data = await res.json();
-      return parseFloat(data[0]?.bid || 1); // USD per 1 EUR → divide USD values by this
+      return parseFloat(data[0]?.bid || 1);
     }
 
     async function fetchDailyPrices() {
@@ -92,9 +94,10 @@
 
     async function loadData() {
       try {
-        const exchangeRate = await fetchExchangeRate(); // USD per 1 EUR
+        const exchangeRate = await fetchExchangeRate();
         const eurPerUsd = 1 / exchangeRate;
 
+        const today = new Date().toISOString().split('T')[0];
         const [dailyData] = await Promise.all([fetchDailyPrices()]);
         const dailyMap = {};
         const timeCols = new Set();
@@ -129,9 +132,14 @@
           }
         }
 
+        // Remove today from daily if intraday exists
+        const hasIntradayToday = [...intradayLabels].some(dt => dt.startsWith(today));
+        if (hasIntradayToday) timeCols.delete(today);
+
+        // Reverse order for both sets
         const sortedDaily = [...timeCols].sort((a, b) => new Date(b) - new Date(a));
-        const sortedIntraday = [...intradayLabels].sort((a, b) => new Date(a) - new Date(b));
-        const allColumns = [...sortedDaily, ...sortedIntraday];
+        const sortedIntraday = [...intradayLabels].sort((a, b) => new Date(b) - new Date(a));
+        const allColumns = [...sortedIntraday, ...sortedDaily];
 
         for (const label of allColumns) {
           const th = document.createElement('th');
@@ -140,24 +148,28 @@
         }
 
         const summaryTotals = Array(allColumns.length).fill(0);
+        let overallTotal = 0;
 
         for (let i = 0; i < bodyRows.length; i++) {
           const row = bodyRows[i];
           const symbol = row.cells[0].textContent;
           const quantity = parseFloat(row.cells[1].textContent);
+          const totalPrice = parseFloat(row.cells[4].textContent);
+
+          overallTotal += totalPrice;
 
           for (let j = 0; j < allColumns.length; j++) {
             const col = allColumns[j];
             const td = document.createElement('td');
-            let price = dailyMap[symbol]?.[col] ?? intradayMap[symbol]?.[col];
+            let price = intradayMap[symbol]?.[col] ?? dailyMap[symbol]?.[col];
             td.textContent = price ? price.toFixed(2) : '-';
             row.appendChild(td);
-
-            if (price) {
-              summaryTotals[j] += price * quantity;
-            }
+            if (price) summaryTotals[j] += price * quantity;
           }
         }
+
+        // Update total price column
+        summaryTotalPriceCell.textContent = overallTotal.toFixed(2);
 
         for (const total of summaryTotals) {
           const td = document.createElement('td');
