@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Stock Price Trends</title>
+  <title>Stock Price Trends 1</title>
   <style>
     table {
       width: 100%;
@@ -23,10 +23,14 @@
       font-family: sans-serif;
       margin-top: 20px;
     }
+    tfoot td {
+      font-weight: bold;
+      background-color: #f9f9f9;
+    }
   </style>
 </head>
 <body>
-  <h2>Stock Price Changes Over Time</h2>
+  <h2>Stock Price Changes Over Time (in EUR)</h2>
   <div class="loading">Loading historical data...</div>
   <table id="stock-table">
     <thead>
@@ -45,15 +49,26 @@
       <tr><td>NFLX</td><td>2</td><td>1003.20</td><td>02.05.2025</td><td>2006.40</td></tr>
       <tr><td>TSLA</td><td>10</td><td>248.25</td><td>02.05.2025</td><td>2482.50</td></tr>
     </tbody>
+    <tfoot>
+      <tr id="summary-row">
+        <td colspan="5">Total per Date/Time</td>
+      </tr>
+    </tfoot>
   </table>
 
   <script>
     const apiKey = 'U3IvlUHsgfPqwclA11fnwhCzptP9FtfE';
     const tickers = ['MSFT', 'META', 'GOOGL', 'NFLX', 'TSLA'];
-    const table = document.getElementById('stock-table');
     const headerRow = document.getElementById('table-header');
     const bodyRows = document.getElementById('table-body').rows;
+    const summaryRow = document.getElementById('summary-row');
     const loadingMsg = document.querySelector('.loading');
+
+    async function fetchExchangeRate() {
+      const res = await fetch(`https://financialmodelingprep.com/api/v3/fx/EURUSD?apikey=${apiKey}`);
+      const data = await res.json();
+      return parseFloat(data[0]?.bid || 1); // USD per 1 EUR → divide USD values by this
+    }
 
     async function fetchDailyPrices() {
       const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${tickers.join(',')}?apikey=${apiKey}`;
@@ -68,36 +83,34 @@
     }
 
     function formatDateLabel(dateStr) {
-      const d = new Date(dateStr);
-      return d.toISOString().split('T')[0];
+      return new Date(dateStr).toISOString().split('T')[0];
     }
 
     function formatDateTimeLabel(dateStr) {
-      const d = new Date(dateStr);
-      return d.toISOString().replace('T', ' ').slice(0, 16);
+      return new Date(dateStr).toISOString().replace('T', ' ').slice(0, 16);
     }
 
     async function loadData() {
       try {
-        const [dailyData] = await Promise.all([fetchDailyPrices()]);
-        const timeCols = new Set();
-        const dailyMap = {};
+        const exchangeRate = await fetchExchangeRate(); // USD per 1 EUR
+        const eurPerUsd = 1 / exchangeRate;
 
-        // Process daily prices for 4 previous days
+        const [dailyData] = await Promise.all([fetchDailyPrices()]);
+        const dailyMap = {};
+        const timeCols = new Set();
+
         for (const stock of dailyData.historicalStockList || []) {
           const symbol = stock.symbol;
           dailyMap[symbol] = {};
           let count = 0;
-
           for (const h of stock.historical) {
             const label = formatDateLabel(h.date);
-            dailyMap[symbol][label] = h.close;
+            if (++count > 4) break;
+            dailyMap[symbol][label] = h.close * eurPerUsd;
             timeCols.add(label);
-            if (++count >= 4) break;
           }
         }
 
-        // Fetch intraday for each ticker (parallel)
         const intradayData = await Promise.all(tickers.map(t => fetchIntraday2h(t)));
         const intradayMap = {};
         const intradayLabels = new Set();
@@ -107,51 +120,49 @@
           const data = intradayData[i];
           intradayMap[symbol] = {};
           let latestDate = data.length ? data[0].date.split(' ')[0] : null;
-
           for (const d of data) {
             if (d.date.startsWith(latestDate)) {
               const dt = formatDateTimeLabel(d.date);
-              intradayMap[symbol][dt] = d.close;
+              intradayMap[symbol][dt] = d.close * eurPerUsd;
               intradayLabels.add(dt);
             }
           }
         }
 
-        // Build headers
         const sortedDaily = [...timeCols].sort((a, b) => new Date(b) - new Date(a));
         const sortedIntraday = [...intradayLabels].sort((a, b) => new Date(a) - new Date(b));
+        const allColumns = [...sortedDaily, ...sortedIntraday];
 
-        for (const label of sortedDaily) {
+        for (const label of allColumns) {
           const th = document.createElement('th');
           th.textContent = label;
           headerRow.appendChild(th);
         }
-        for (const dt of sortedIntraday) {
-          const th = document.createElement('th');
-          th.textContent = dt;
-          headerRow.appendChild(th);
-        }
 
-        // Fill rows
+        const summaryTotals = Array(allColumns.length).fill(0);
+
         for (let i = 0; i < bodyRows.length; i++) {
           const row = bodyRows[i];
           const symbol = row.cells[0].textContent;
+          const quantity = parseFloat(row.cells[1].textContent);
 
-          // Daily cells
-          for (const label of sortedDaily) {
+          for (let j = 0; j < allColumns.length; j++) {
+            const col = allColumns[j];
             const td = document.createElement('td');
-            const val = dailyMap[symbol]?.[label];
-            td.textContent = val ? val.toFixed(2) : '-';
+            let price = dailyMap[symbol]?.[col] ?? intradayMap[symbol]?.[col];
+            td.textContent = price ? price.toFixed(2) : '-';
             row.appendChild(td);
-          }
 
-          // Intraday cells
-          for (const dt of sortedIntraday) {
-            const td = document.createElement('td');
-            const val = intradayMap[symbol]?.[dt];
-            td.textContent = val ? val.toFixed(2) : '-';
-            row.appendChild(td);
+            if (price) {
+              summaryTotals[j] += price * quantity;
+            }
           }
+        }
+
+        for (const total of summaryTotals) {
+          const td = document.createElement('td');
+          td.textContent = total > 0 ? total.toFixed(2) : '-';
+          summaryRow.appendChild(td);
         }
 
         loadingMsg.style.display = 'none';
